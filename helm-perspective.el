@@ -3,8 +3,6 @@
 
 (declare-function hash-table-keys "subr-x" (hash-table))
 
-;; TODO: Caching buffer lists
-
 (defun helm-persp-buffers-list--init ()
   ;; Adapted from `helm-buffers-list--init'
   (helm-attrset
@@ -27,17 +25,26 @@
 ;; TODO: The buffer actions for `helm-source-buffers' are still available.
 ;; Merge these actions into those?
 (defconst helm-persp-actions
-  (helm-make-actions
-   "Switch to buffer in perspective"
-   (lambda (candidate)
-     (persp-switch (helm-attr 'name))
-     (switch-to-buffer candidate))
-   "Set buffer to current perspective" #'persp-set-buffer
-   "Add buffer to current perspective" #'persp-add-buffer
-   "Remove buffer from its perspective"
-   (lambda (candidate)
-     (with-perspective (helm-attr 'name)
-       (persp-remove-buffer candidate)))))
+  (append (helm-make-actions
+           "Switch to buffer(s) in perspective"
+           (lambda (_candidate)
+             (persp-switch (helm-attr 'name))
+             (helm-window-show-buffers (helm-marked-candidates)))
+           "Set buffer(s) to current perspective"
+           (lambda (_candidate)
+             (mapc #'persp-set-buffer (helm-marked-candidates)))
+           "Add buffer(s) to current perspective"
+           (lambda (_candidate)
+             (mapcar #'persp-add-buffer (helm-marked-candidates)))
+           "Remove buffer(s) from their perspective"
+           (lambda (_candidate)
+             (with-perspective (helm-attr 'name)
+               (mapc #'persp-remove-buffer (helm-marked-candidates))))
+           "Kill perspective"
+           (lambda (_candidate)
+             (persp-kill (helm-attr 'name))))
+          ;; NOTE: Assumes the first element is `helm-buffer-switch-buffers'
+          (cdr helm-type-buffer-actions)))
 
 ;;;###autoload
 (defun helm-persp-buffers ()
@@ -45,11 +52,15 @@
   (interactive)
   (helm
    :sources (cl-loop
+             with current = (persp-name persp-curr)
+             with last = (when persp-last (persp-name persp-last))
              for name in
-             (sort (hash-table-keys perspectives-hash)
-                   (lambda (a b)
-                     (let ((c (compare-strings a nil nil b nil nil t)))
-                       (or (eq c t) (< c 0)))))
+             (let ((names (hash-table-keys perspectives-hash)))
+               (when last
+                 (setq names (cons last (cl-delete
+                                         last names :test #'equal))))
+               (setq names (cons current (cl-delete
+                                          current names :test #'equal))))
              for persp = (gethash name perspectives-hash)
              for src = (helm-make-source name 'helm-source-buffers
                          :init 'helm-persp-buffers-list--init
