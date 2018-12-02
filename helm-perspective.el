@@ -43,7 +43,7 @@
   (helm-attrset
    'candidates (cl-loop
                 for buf in (persp-buffers
-                            (gethash (helm-attr 'name) perspectives-hash))
+                            (gethash (helm-attr 'name) (perspectives-hash)))
                 for name = (buffer-name buf)
                 if (not (null name)) collect name))
   (let ((result (cl-loop for b in (helm-attr 'candidates)
@@ -85,9 +85,9 @@
 (defun helm-persp-buffers ()
   "Pre-configured `helm' for `perspective'."
   (interactive)
-  (let* ((current (persp-name persp-curr))
-         (last (when persp-last (persp-name persp-last)))
-         (names (let ((names (hash-table-keys perspectives-hash)))
+  (let* ((current (persp-name (persp-curr)))
+         (last (when (persp-last) (persp-name (persp-last))))
+         (names (let ((names (hash-table-keys (perspectives-hash))))
                   (when last
                     (setq names (cons last (cl-delete
                                             last names :test #'equal))))
