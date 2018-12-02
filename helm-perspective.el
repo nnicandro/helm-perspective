@@ -38,9 +38,11 @@
    :sources (cl-loop
              for name in (hash-table-keys perspectives-hash)
              for persp = (gethash name perspectives-hash)
-             collect (helm-make-source name 'helm-source-buffers
-                       :init 'helm-persp-buffers-list--init
-                       :candidates 'helm-persp-buffers-list))
+             for src = (helm-make-source name 'helm-source-buffers
+                         :init 'helm-persp-buffers-list--init
+                         :candidates 'helm-persp-buffers-list)
+             do (setf (alist-get 'action src) helm-persp-actions)
+             and collect src)
    :truncate-lines helm-buffers-truncate-lines
    :keymap helm-buffer-map
    :buffer "*helm-persp-buffers*"))
