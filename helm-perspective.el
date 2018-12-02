@@ -44,8 +44,7 @@
    'candidates (cl-loop
                 for buf in (persp-buffers
                             (gethash (helm-attr 'name) (perspectives-hash)))
-                for name = (buffer-name buf)
-                if (not (null name)) collect name))
+                when (buffer-live-p buf) collect (buffer-name buf)))
   (let ((result (cl-loop for b in (helm-attr 'candidates)
                          maximize (length b) into len-buf
                          maximize (length (with-current-buffer b
@@ -87,11 +86,12 @@
   (interactive)
   (let* ((current (persp-name (persp-curr)))
          (last (when (persp-last) (persp-name (persp-last))))
-         (names (let ((names (hash-table-keys (perspectives-hash))))
-                  (when last
-                    (setq names (cons last (cl-delete
-                                            last names :test #'equal))))
-                  (cons current (cl-delete current names :test #'equal)))))
+         (names (persp-names))
+         (names
+          (progn
+            (when last
+              (setq names (cons last (cl-delete last names :test #'equal))))
+            (cons current (cl-delete current names :test #'equal)))))
     (helm
      :sources (append (cl-loop
                        for name in names
