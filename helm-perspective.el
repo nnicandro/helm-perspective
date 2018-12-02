@@ -103,7 +103,10 @@
                       (list
                        (helm-make-source "Kill perspective" 'helm-source-sync
                          :candidates names
-                         :action #'persp-kill)))
+                         :action (lambda (_candidate)
+                                   (dolist (persp (helm-marked-candidates))
+                                     (persp-kill persp)))
+                         :persistent-help "Kill perspective(s)")))
      :truncate-lines helm-buffers-truncate-lines
      :keymap helm-buffer-map
      :buffer "*helm-persp-buffers*")))
