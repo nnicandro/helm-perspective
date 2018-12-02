@@ -5,7 +5,7 @@
 ;; Author: Nathaniel Nicandro <nathanielnicandro@gmail.com>
 ;; Created: 18 Feb 2018
 ;; Version: 0.0.1
-;; X-URL: https://github.com/nathan/helm-perspective
+;; URL: https://github.com/dzop/helm-perspective
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -38,6 +38,20 @@
 
 (declare-function hash-table-keys "subr-x" (hash-table))
 
+(defmacro helm-persp-perspectify-action (fun switch)
+  "Return a helm action that call's FUN in a different perspective.
+If SWITCH is non-nil, the returned function calls FUN after
+switching to the perspective whose name is identical to the name
+of the current `helm' source and stays in the switched
+perspective. Otherwise, the perspective is temporarily switched
+to before calling FUN."
+  `(lambda (candidates)
+     ,@(if switch
+           `((persp-switch (helm-attr 'name))
+             (funcall #',fun candidates))
+         `((with-perspective (helm-attr 'name)
+             (funcall #',fun candidates))))))
+
 (defun helm-persp-buffers-list--init ()
   ;; Adapted from `helm-buffers-list--init'
   (helm-attrset
@@ -55,16 +69,6 @@
       (helm-set-local-variable 'helm-buffer-max-length (car result)))
     (unless (default-value 'helm-buffer-max-len-mode)
       (helm-set-local-variable 'helm-buffer-max-len-mode (cdr result)))))
-
-(defmacro helm-persp-perspectify-action (fun switch)
-  `(lambda (candidates)
-     ,(if switch
-          `(progn
-             (let ((this-command 'persp-switch))
-               (persp-switch (helm-attr 'name)))
-             (funcall #',fun candidates))
-        `(with-perspective (helm-attr 'name)
-           (funcall #',fun candidates)))))
 
 (defconst helm-persp-actions
   `(("Switch to buffer(s)" .
@@ -124,23 +128,25 @@
               (setq names (cons last (cl-delete last names :test #'equal))))
             (cons current (cl-delete current names :test #'equal)))))
     (helm
-     :sources (append (cl-loop
-                       for name in names
-                       for src = (helm-make-source name 'helm-source-buffers
-                                   :init 'helm-persp-buffers-list--init
-                                   :keymap helm-buffer-map)
-                       do (setf (alist-get 'action src) helm-persp-actions)
-                       and collect src)
-                      (list
-                       (helm-make-source "Kill perspective" 'helm-source-sync
-                         :candidates names
-                         :action (lambda (_candidate)
-                                   (let ((candidates (helm-marked-candidates)))
-                                     (if (member (persp-name (persp-curr)) candidates)
-                                         (error "Can't kill the current perspective while helm is open")
-                                       (dolist (persp (helm-marked-candidates))
-                                         (persp-kill persp)))))
-                         :persistent-help "Kill perspective(s)")))
+     :sources
+     (append (cl-loop
+              for name in names
+              for src = (helm-make-source name 'helm-source-buffers
+                          :init 'helm-persp-buffers-list--init
+                          :keymap helm-buffer-map)
+              do (setf (alist-get 'action src) helm-persp-actions)
+              and collect src)
+             (list
+              (helm-make-source "Kill perspective" 'helm-source-sync
+                :candidates names
+                :action
+                (lambda (_candidate)
+                  (let ((candidates (helm-marked-candidates)))
+                    (if (member (persp-name (persp-curr)) candidates)
+                        (error "Can't kill the current perspective while helm is open")
+                      (dolist (persp (helm-marked-candidates))
+                        (persp-kill persp)))))
+                :persistent-help "Kill perspective(s)")))
      :truncate-lines helm-buffers-truncate-lines
      :buffer "*helm-persp-buffers*")))
 
