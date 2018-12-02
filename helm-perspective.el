@@ -50,25 +50,27 @@
 (defun helm-persp-buffers ()
   "Pre-configured `helm' for `perspective'."
   (interactive)
-  (helm
-   :sources (cl-loop
-             with current = (persp-name persp-curr)
-             with last = (when persp-last (persp-name persp-last))
-             for name in
-             (let ((names (hash-table-keys perspectives-hash)))
-               (when last
-                 (setq names (cons last (cl-delete
-                                         last names :test #'equal))))
-               (setq names (cons current (cl-delete
-                                          current names :test #'equal))))
-             for persp = (gethash name perspectives-hash)
-             for src = (helm-make-source name 'helm-source-buffers
-                         :init 'helm-persp-buffers-list--init
-                         :keymap helm-buffer-map)
-             do (setf (alist-get 'action src) helm-persp-actions)
-             and collect src)
-   :truncate-lines helm-buffers-truncate-lines
-   :keymap helm-buffer-map
-   :buffer "*helm-persp-buffers*"))
+  (let* ((current (persp-name persp-curr))
+         (last (when persp-last (persp-name persp-last)))
+         (names (let ((names (hash-table-keys perspectives-hash)))
+                  (when last
+                    (setq names (cons last (cl-delete
+                                            last names :test #'equal))))
+                  (cons current (cl-delete current names :test #'equal)))))
+    (helm
+     :sources (append (cl-loop
+                       for name in names
+                       for src = (helm-make-source name 'helm-source-buffers
+                                   :init 'helm-persp-buffers-list--init
+                                   :keymap helm-buffer-map)
+                       do (setf (alist-get 'action src) helm-persp-actions)
+                       and collect src)
+                      (list
+                       (helm-make-source "Kill perspective" 'helm-source-sync
+                         :candidates names
+                         :action #'persp-kill)))
+     :truncate-lines helm-buffers-truncate-lines
+     :keymap helm-buffer-map
+     :buffer "*helm-persp-buffers*")))
 
 (provide 'helm-perspective)
