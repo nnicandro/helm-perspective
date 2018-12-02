@@ -104,11 +104,13 @@
                        (helm-make-source "Kill perspective" 'helm-source-sync
                          :candidates names
                          :action (lambda (_candidate)
-                                   (dolist (persp (helm-marked-candidates))
-                                     (persp-kill persp)))
+                                   (let ((candidates (helm-marked-candidates)))
+                                     (if (member (persp-name (persp-curr)) candidates)
+                                         (error "Can't kill the current perspective while helm is open")
+                                       (dolist (persp (helm-marked-candidates))
+                                         (persp-kill persp)))))
                          :persistent-help "Kill perspective(s)")))
      :truncate-lines helm-buffers-truncate-lines
-     :keymap helm-buffer-map
      :buffer "*helm-persp-buffers*")))
 
 (provide 'helm-perspective)
