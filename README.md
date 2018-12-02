@@ -13,5 +13,5 @@ perspective. Also, all of the `helm-buffers-list` actions are augmented in
 current `helm` source or swicth to the source's perspective whenever that seems
 logical to do.
 
-Note this package is intendd to work with `perspective`
+Note this package is intended to work with `perspective`
 (<https://github.com/nex3/perspective-el>).
