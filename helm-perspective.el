@@ -27,9 +27,16 @@
 ;; TODO: More actions
 (defconst helm-persp-actions
   (helm-make-actions
-   "Switch to buffer" (lambda (candidate)
-                        (persp-switch (helm-attr 'name))
-                        (switch-to-buffer candidate))))
+   "Switch to buffer in its perspective"
+   (lambda (candidate)
+     (persp-switch (helm-attr 'name))
+     (switch-to-buffer candidate))
+   "Set buffer to current perspective" #'persp-set-buffer
+   "Add buffer to current perspective" #'persp-add-buffer
+   "Remove buffer from its perspective"
+   (lambda (candidate)
+     (with-perspective (helm-attr 'name)
+       (persp-remove-buffer candidate)))))
 
 ;;;###autoload
 (defun helm-persp-buffers ()
