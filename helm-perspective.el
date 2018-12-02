@@ -14,6 +14,7 @@
         helm-buffers-list-cache
         ;; disable these since `perspective' activates buffers which results in
         ;; lots of calls to buffer display functions.
+        window-configuration-change-hook
         purpose--active-p
         golden-ratio-mode)
     (with-perspective (helm-attr 'name)
