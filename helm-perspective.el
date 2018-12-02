@@ -56,29 +56,60 @@
     (unless (default-value 'helm-buffer-max-len-mode)
       (helm-set-local-variable 'helm-buffer-max-len-mode (cdr result)))))
 
-;; TODO: The buffer actions for `helm-source-buffers' are still available.
-;; Merge these actions into those?
+(defmacro helm-persp-perspectify-action (fun switch)
+  `(lambda (candidates)
+     ,(if switch
+          `(progn
+             (let ((this-command 'persp-switch))
+               (persp-switch (helm-attr 'name)))
+             (funcall #',fun candidates))
+        `(with-perspective (helm-attr 'name)
+           (funcall #',fun candidates)))))
+
 (defconst helm-persp-actions
-  (append (helm-make-actions
-           "Switch to buffer(s) in perspective"
-           (lambda (_candidate)
-             (persp-switch (helm-attr 'name))
-             (helm-window-show-buffers (helm-marked-candidates)))
-           "Set buffer(s) to current perspective"
-           (lambda (_candidate)
-             (mapc #'persp-set-buffer (helm-marked-candidates)))
-           "Add buffer(s) to current perspective"
-           (lambda (_candidate)
-             (mapcar #'persp-add-buffer (helm-marked-candidates)))
-           "Remove buffer(s) from their perspective"
-           (lambda (_candidate)
-             (with-perspective (helm-attr 'name)
-               (mapc #'persp-remove-buffer (helm-marked-candidates))))
-           "Kill perspective"
-           (lambda (_candidate)
-             (persp-kill (helm-attr 'name))))
-          ;; NOTE: Assumes the first element is `helm-buffer-switch-buffers'
-          (cdr helm-type-buffer-actions)))
+  `(("Switch to buffer(s)" .
+     ,(helm-persp-perspectify-action helm-buffer-switch-buffers t))
+    ("Set buffer(s)" .
+     (lambda (_candidate)
+       (mapc #'persp-set-buffer (helm-marked-candidates))))
+    ("Add buffer(s)" .
+     (lambda (_candidate)
+       (mapcar #'persp-add-buffer (helm-marked-candidates))))
+    ("Remove buffer(s)" .
+     ,(helm-persp-perspectify-action
+       (lambda (_candidate)
+         (mapc #'persp-remove-buffer (helm-marked-candidates)))
+       nil))
+    ("Switch to buffer(s) other window `C-c o'" .
+     ,(helm-persp-perspectify-action helm-buffer-switch-buffers-other-window t))
+    ("Browse project from buffer" .
+     ,(helm-persp-perspectify-action helm-buffers-browse-project t))
+    ("Query replace regexp `C-M-%'" .
+     ,(helm-persp-perspectify-action helm-buffer-query-replace-regexp t))
+    ("Query replace `M-%'" .
+     ,(helm-persp-perspectify-action helm-buffer-query-replace t))
+    ("View buffer" .
+     ,(helm-persp-perspectify-action view-buffer t))
+    ("Display buffer" .
+     ,(helm-persp-perspectify-action display-buffer t))
+    ("Rename buffer" .
+     ,(helm-persp-perspectify-action helm-buffers-rename-buffer nil))
+    ("Grep buffers `M-g s' (C-u grep all buffers)" .
+     ,(helm-persp-perspectify-action helm-zgrep-buffers t))
+    ("Multi occur buffer(s) `C-s'" .
+     ,(helm-persp-perspectify-action helm-multi-occur-as-action t))
+    ("Revert buffer(s) `M-U'" . helm-revert-marked-buffers)
+    ("Insert buffer" . insert-buffer)
+    ("Kill buffer(s) `M-D'" . helm-kill-marked-buffers)
+    ("Diff with file `C-='" .
+     ,(helm-persp-perspectify-action diff-buffer-with-file t))
+    ("Ediff Marked buffers `C-c ='" .
+     ,(helm-persp-perspectify-action helm-ediff-marked-buffers t))
+    ("Ediff Merge marked buffers `M-='" .
+     ,(helm-persp-perspectify-action
+       (lambda (candidate)
+         (helm-ediff-marked-buffers candidate t))
+       t))))
 
 ;;;###autoload
 (defun helm-persp-buffers ()
