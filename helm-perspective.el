@@ -40,20 +40,7 @@
 
 (defclass helm-persp-buffers-source-add (helm-source-buffers)
   ((buffer-list
-    :initform (lambda ()
-                (mapcar #'buffer-name
-                   (cl-set-difference
-                    (cl-remove-if (lambda (x) (string-prefix-p " " (buffer-name x)))
-                                  (buffer-list))
-                    (cl-loop
-                     with all-persp-bufs = nil
-                     for name in (persp-names)
-                     ;; FIXME: Duplicate creation of buffer list for
-                     ;; perspective name
-                     do (dolist (el (helm-persp-buffers--get name t))
-                          (unless (memq el all-persp-bufs)
-                            (push el all-persp-bufs)))
-                     finally return all-persp-bufs))))))
+    :initform #'helm-persp-buffers--orphaned-buffers))
   :documentation "Source for adding a buffer that does not belong to any perspective.")
 
 (cl-defmethod helm-setup-user-source ((source helm-persp-buffers-source-add))
@@ -81,15 +68,27 @@ to before calling FUN."
          `((with-perspective (helm-attr 'name)
              (funcall #',fun candidates))))))
 
-(defun helm-persp-buffers--get (name &optional as-buffers)
+(defun helm-persp-buffers--orphaned-buffers ()
   (cl-loop
-   for buf in (persp-buffers (gethash name (perspectives-hash)))
-   when (buffer-live-p buf) collect (if as-buffers buf (buffer-name buf))))
+   for buf in (apply #'nconc (mapcar (lambda (name) (helm-persp-buffers--get name t))
+                                (persp-names)))
+   unless (memq buf all-persp-bufs)
+   collect buf into all-persp-bufs
+   finally return (cl-loop
+                   for buf in (buffer-list)
+                   unless (memq buf all-persp-bufs)
+                   collect (buffer-name buf))))
+
+(defun helm-persp-buffers--get (name &optional as-buffers)
+  (let ((persp (gethash name (perspectives-hash))))
+    (when (and persp (not (persp-killed-p persp)))
+      (cl-loop
+       for buf in (persp-buffers persp)
+       when (buffer-live-p buf)
+       collect (if as-buffers buf (buffer-name buf))))))
 
 (defun helm-persp-buffers-get ()
-  "Return the buffers for perspective with NAME.
-If AS-BUFFERS is non-nil return a list of buffer objects,
-otherwise a list of buffer names is returned."
+  "Return the buffer names for the current `helm' `perspective' source."
   (helm-persp-buffers--get (helm-attr 'name)))
 
 (defconst helm-persp-actions
@@ -137,18 +136,51 @@ otherwise a list of buffer names is returned."
          (helm-ediff-marked-buffers candidate t))
        t))))
 
+(defun helm-persp--names ()
+  (let ((current (persp-name (persp-curr)))
+        (last (when (persp-last) (persp-name (persp-last))))
+        (names (persp-names)))
+    (when last
+      (setq names (cons last (delete last names))))
+    (cons current (delete current names))))
+
+(defun helm-persp--kill-source (names)
+  (helm-make-source "Kill perspective" 'helm-source-sync
+    :candidates names
+    :action
+    (lambda (_candidate)
+      (let ((candidates (helm-marked-candidates)))
+        (if (member (persp-name (persp-curr)) candidates)
+            (error "Can't kill the current perspective while helm is open")
+          (dolist (persp (helm-marked-candidates))
+            (persp-kill persp)))))
+    :persistent-help "Kill perspective(s)"))
+
+;;;###autoload
+(defun helm-persp-kill ()
+  "Pre-configured `helm' to kill a perspective."
+  (interactive)
+  (helm :sources (list (helm-persp--kill-source (helm-persp--names)))
+        :truncate-lines helm-buffers-truncate-lines
+        :buffer "*helm-persp-kill*"))
+
 ;;;###autoload
 (defun helm-persp-buffers ()
-  "Pre-configured `helm' for `perspective'."
+  "Pre-configured `helm' for `perspective'.
+The buffers contained in each perspective of the `selected-frame'
+is a separate `helm' source. The `persp-curr' is always the first
+source and the `persp-last' is always the second.
+
+There are also sources to kill a perspective and to associate a
+buffer that is not in any perspective with the current
+perspective.
+
+There are also `perspective' specific `helm' actions and all
+other buffer actions are \"perspectified\" so that they switch to
+the corresponding perspective if needed before performing the
+action."
   (interactive)
-  (let* ((current (persp-name (persp-curr)))
-         (last (when (persp-last) (persp-name (persp-last))))
-         (names (persp-names))
-         (names
-          (progn
-            (when last
-              (setq names (cons last (cl-delete last names :test #'equal))))
-            (cons current (cl-delete current names :test #'equal)))))
+  (let ((names (helm-persp--names)))
     (helm
      :sources
      (append
@@ -159,16 +191,7 @@ otherwise a list of buffer names is returned."
        do (setf (alist-get 'action src) helm-persp-actions)
        and collect src)
       (list
-       (helm-make-source "Kill perspective" 'helm-source-sync
-         :candidates names
-         :action
-         (lambda (_candidate)
-           (let ((candidates (helm-marked-candidates)))
-             (if (member (persp-name (persp-curr)) candidates)
-                 (error "Can't kill the current perspective while helm is open")
-               (dolist (persp (helm-marked-candidates))
-                 (persp-kill persp)))))
-         :persistent-help "Kill perspective(s)")
+       (helm-persp--kill-source names)
        (helm-make-source "Associate buffer" 'helm-persp-buffers-source-add)))
      :truncate-lines helm-buffers-truncate-lines
      :buffer "*helm-persp-buffers*")))
